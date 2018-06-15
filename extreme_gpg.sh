@@ -2,25 +2,59 @@
 
 set -e
 
-FILE_DIR=$(dirname $0)
+#remove junk files whether the script fails.
+function end_script() {
+	STATUS=$?
+	if [ $STATUS -ne 0 ]; then
+		if [ -f $FILE ]; then
+			echo "Removing ${FILE}.*"
+			rm $FILE.* > /dev/null
+		fi
+	fi
+}
+
+trap end_script EXIT
+
+function get_hash() {
+	echo -n $(echo -n $1 | sha512sum | cut -d " " -f 1)
+}
+
+function get_hmac() {
+	local hash=$(get_hash $1)
+
+	echo -n $(get_hash "${1}${hash}")
+}
+
 TYPE=$1
 
 if [ "$TYPE" == '-e' ] || ( [ "$TYPE" != '-e' ] && [ "$TYPE" != '-d' ] ); then
 	if [ "$TYPE" == '-e' ]; then
 		PASSWORD=$2
-		FILE=$FILE_DIR/$(basename $3)
+
+		if [ $3 ]; then
+			FILE=$(realpath $3)
+		fi
+
 		CIPHERED_FILE=$FILE.gpg
 		ROUNDS=$4
 	else
 		TYPE='-e'
 		PASSWORD=$1
-		FILE=$FILE_DIR/$(basename $2)
+
+		if [ $2 ]; then
+			FILE=$(realpath $2)
+		fi
+
 		CIPHERED_FILE=$FILE.gpg
 		ROUNDS=$3
 	fi
 elif [ $TYPE == '-d' ]; then
 	PASSWORD=$2
-	FILE=$FILE_DIR/$(basename $3)
+
+	if [ $3 ]; then
+		FILE=$(realpath $3)
+	fi
+
 	CIPHERED_FILE=$FILE.gpg
 	ROUNDS=$4
 fi
@@ -44,6 +78,8 @@ fi
 if [ ! $ROUNDS ]; then
 	ROUNDS=$DEFAULT_ROUNDS
 fi
+
+PASSWORD=$(get_hmac "${ROUNDS}${PASSWORD}")
 
 function cipher () {
 	gpg -c --batch --passphrase $1 --cipher-algo $2 --personal-digest-preferences SHA512 --s2k-mode 3 --s2k-count 65000000 -o $4 $3
@@ -103,5 +139,5 @@ elif [ $TYPE == '-d' ]; then
 		fi
 	done
 
-	mv $_CIPHERED_FILE $FILE_DIR/$( echo "$(basename $_CIPHERED_FILE)" | cut -d "." -f -2 )
+	mv $_CIPHERED_FILE $(dirname $FILE)/$( echo "$(basename $_CIPHERED_FILE)" | cut -d "." -f -2 )
 fi
