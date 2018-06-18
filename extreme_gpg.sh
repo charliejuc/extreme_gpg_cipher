@@ -6,7 +6,7 @@ set -e
 function end_script() {
 	STATUS=$?
 	if [ $STATUS -ne 0 ]; then
-		if [ -f $FILE ]; then
+		if [ "$FILE" ] && [ -f "$FILE" ]; then
 			echo "Removing ${FILE}.*"
 			rm $FILE.* > /dev/null
 		fi
